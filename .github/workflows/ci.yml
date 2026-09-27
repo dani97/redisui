@@ -1,0 +1,100 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep the gates in step with the local justfile.
+  RUSTFLAGS: -D warnings
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: fmt, clippy, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build with the MSRV toolchain
+        # Catches accidental use of stabilised features newer than our floor.
+        run: |
+          rustup toolchain install "$(grep -oP 'rust-version = "\K[^"]+' Cargo.toml)"
+          cargo +"$(grep -oP 'rust-version = "\K[^"]+' Cargo.toml)" check --all-targets
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Unit and render tests
+        run: cargo nextest run --workspace
+
+  integration:
+    name: integration tests (live Redis)
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6399:6379
+        # Fail fast rather than letting a slow boot look like a hung test.
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Wait for Redis
+        run: |
+          for _ in $(seq 1 30); do
+            if redis-cli -p 6399 ping 2>/dev/null | grep -q PONG; then exit 0; fi
+            sleep 1
+          done
+          echo "redis did not become ready"; exit 1
+
+      - name: Integration tests
+        env:
+          # Database 15 is scratch. The tests isolate by key prefix and never
+          # FLUSHDB, but still point at a disposable index.
+          REDISUI_TEST_REDIS: redis://127.0.0.1:6399/15
+        run: cargo nextest run --test live_store
+
+      - name: Authentication scenario
+        env:
+          REDISUI_TEST_REDIS: redis://127.0.0.1:6399/15
+          REDISUI_TEST_PASSWORD: ci-only-throwaway
+        run: cargo nextest run --test live_store authenticates
+
+  deps:
+    name: dependency policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny check

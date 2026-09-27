@@ -1,0 +1,78 @@
+# Project settings for bacon. Watched and hot-reloaded: no restart needed.
+# Run `bacon` for the default job, `bacon <job>` for a specific one, `?` for help.
+
+default_job = "check"
+
+[jobs.check]
+command = ["cargo", "check", "--all-targets", "--message-format", "short"]
+need_stdout = false
+
+[jobs.check-all]
+command = ["cargo", "check", "--all-targets", "--all-features"]
+need_stdout = false
+
+[jobs.clippy]
+command = ["cargo", "clippy", "--all-targets", "--message-format", "short"]
+need_stdout = false
+
+# Zero warnings is the bar for this repo; `allow_warnings = false` is bacon's
+# default, so a clean run is a genuinely clean run.
+[jobs.clippy-strict]
+command = [
+    "cargo", "clippy",
+    "--all-targets",
+    "--", "-D", "warnings",
+]
+need_stdout = false
+
+[jobs.test]
+command = ["cargo", "test"]
+need_stdout = true
+
+# nextest output needs its own analyzer. Falls back gracefully to `cargo test`
+# if nextest is not installed: the command name is resolved at run time.
+[jobs.nextest]
+command = ["cargo", "nextest", "run", "--hide-progress-bar", "--failure-output", "final"]
+analyzer = "nextest"
+need_stdout = true
+
+# Integration tests only; needs a live Redis, so point it at one. The tests
+# skip themselves unless REDISUI_TEST_REDIS is set.
+[jobs.test-live]
+command = [
+    "cargo", "nextest", "run", "--test", "live_store",
+    "--hide-progress-bar", "--failure-output", "final",
+]
+analyzer = "nextest"
+need_stdout = true
+env.REDISUI_TEST_REDIS = "redis://127.0.0.1:6390/15"
+default_watch = false
+watch = ["src/store", "tests/live_store.rs", "Cargo.toml"]
+
+# `bacon run` actually launches the TUI. need_stdout so the spawned program's
+# own output is not swallowed; on_success hands you back to the previous job.
+[jobs.run]
+command = ["cargo", "run", "--", "--url", "redis://127.0.0.1:6390"]
+need_stdout = true
+allow_warnings = true
+on_success = "job:previous-or-quit"
+
+[jobs.doc]
+command = ["cargo", "doc", "--no-deps", "--document-private-items"]
+need_stdout = false
+
+[keybindings]
+c = "job:check"
+C = "job:clippy"
+s = "job:clippy-strict"
+t = "job:test"
+n = "job:nextest"
+i = "job:test-live"
+r = "job:run"
+d = "job:doc"
+b = "job:previous-or-quit"
+
+[exports.locations]
+auto = true
+path = ".bacon-locations"
+line_format = "{kind} {path}:{line}:{column} {message}"

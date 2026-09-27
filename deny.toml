@@ -1,0 +1,51 @@
+# Dependency policy. Run with `cargo deny check` or `just deny`.
+
+[graph]
+# Target the MSRV declared in Cargo.toml so advisories and yanked versions are
+# evaluated for the oldest toolchain we support, not the newest local one.
+targets = [
+    { triple = "x86_64-apple-darwin" },
+    { triple = "x86_64-unknown-linux-gnu" },
+]
+
+[advisories]
+version = 2
+# Report known-vulnerable, unmaintained and unsound advisories, but do not fail
+# the build on yanked crates only.
+ignore = []
+# Uncomment to pin a known issue with a reason and an expiry date instead of
+# silently tolerating it:
+# ignore = [
+#     { id = "RUSTSEC-0000-0000", reason = "transitive via ratatui, upgrading is blocked", expires = "2026-12-01" },
+# ]
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+# Transitive crates we do not control should not fail our policy.
+exceptions = []
+
+[bans]
+# Multiple versions of a crate are normal; duplicates are worth seeing.
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+# Commented out until we are ready to enforce it; `cargo deny check` reports
+# these as warnings today.
+# deny = []
+# skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

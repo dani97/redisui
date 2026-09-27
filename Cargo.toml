@@ -1,0 +1,16 @@
+[package]
+name = "redisui"
+version = "0.1.0"
+edition = "2024"
+# Edition 2024 needs >= 1.85; this is the oldest toolchain we test against.
+rust-version = "1.97.1"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive", "env"] }
+futures = "0.3"
+redis = { version = "1.7", features = ["tokio-comp", "connection-manager"] }
+ratatui = "0.30"
+crossterm = { version = "0.29", features = ["event-stream"] }
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "time"] }
+unicode-width = "0.2"
